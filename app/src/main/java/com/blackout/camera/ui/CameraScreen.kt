@@ -677,15 +677,34 @@ private fun LastShot(uri: Uri?, video: Boolean) {
     }
     Box(
         Modifier.size(48.dp).clip(RoundedCornerShape(10.dp)).border(2.dp, Color.White, RoundedCornerShape(10.dp)).background(C.Card)
-            .clickable(enabled = uri != null) {
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, if (video) "video/*" else "image/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-                }
-            },
+            .clickable(enabled = uri != null) { if (uri != null) openShot(context, uri, video) },
     ) {
         thumb?.let { Image(it.asImageBitmap(), "Open last shot", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
     }
 }
+
+/** Opens the last photo or video in the app picked in Settings → Open photos with. */
+fun openShot(context: Context, uri: Uri, video: Boolean) {
+    val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, if (video) "video/*" else "image/*")
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    val chooser = Intent.createChooser(view, "Open with")
+    val ours = Intent(view).setPackage(GALLERY_PACKAGE)
+    val hasOurs = ours.resolveActivity(context.packageManager) != null
+    val pick = when (Prefs.openWith) {
+        "gallery" -> if (hasOurs) ours else chooser
+        "choose" -> chooser
+        else -> view
+    }
+    runCatching { context.startActivity(pick) }.onFailure {
+        runCatching { context.startActivity(chooser) }.onFailure {
+            android.widget.Toast.makeText(context, "No app on this phone can open it", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+    if (Prefs.openWith == "gallery" && !hasOurs)
+        android.widget.Toast.makeText(context, "Your Gallery app isn't installed (or needs updating) · pick an app", android.widget.Toast.LENGTH_LONG).show()
+}
+
+const val GALLERY_PACKAGE = "com.blackout.gallery"
 
 @Composable
 private fun QrCard(context: Context, text: String) {

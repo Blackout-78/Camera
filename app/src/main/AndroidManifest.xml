@@ -14,6 +14,15 @@
 
     <uses-feature android:name="android.hardware.camera.any" android:required="true" />
 
+    <!-- Lets Camera check whether your Gallery app is installed, to open photos in it. -->
+    <queries>
+        <package android:name="com.blackout.gallery" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="image/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".CameraApp"
         android:allowBackup="false"

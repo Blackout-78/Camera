@@ -16,6 +16,7 @@ object Prefs {
     private val _badge = mutableStateOf(true)
     private val _quality = mutableIntStateOf(95)
     private val _video = mutableStateOf("1080p")
+    private val _openWith = mutableStateOf("gallery")
     private val _iconStyle = mutableStateOf("A")
     private val _iconMain = mutableIntStateOf(0xFF4F9DFF.toInt())
     private val _iconSecond = mutableIntStateOf(0xFFFFFFFF.toInt())
@@ -29,6 +30,7 @@ object Prefs {
         _badge.value = sp.getBoolean("badge", true)
         _quality.intValue = sp.getInt("quality", 95)
         _video.value = sp.getString("video", "1080p") ?: "1080p"
+        _openWith.value = sp.getString("openWith", "gallery") ?: "gallery"
         _iconStyle.value = sp.getString("iconStyle", "A") ?: "A"
         _iconMain.intValue = sp.getInt("iconMain", 0xFF4F9DFF.toInt())
         _iconSecond.intValue = sp.getInt("iconSecond", 0xFFFFFFFF.toInt())
@@ -45,6 +47,8 @@ object Prefs {
     var grid: Boolean get() = _grid.value; set(v) { _grid.value = v; b("grid", v) }
     var badge: Boolean get() = _badge.value; set(v) { _badge.value = v; b("badge", v) }
     var quality: Int get() = _quality.intValue; set(v) { _quality.intValue = v; sp.edit().putInt("quality", v).apply() }
+    /** What opens when you tap the last shot: "gallery" (our Gallery), "choose" (pick each time) or "phone" (phone's default). */
+    var openWith: String get() = _openWith.value; set(v) { _openWith.value = v; sp.edit().putString("openWith", v).apply() }
     var video: String get() = _video.value; set(v) { _video.value = v; sp.edit().putString("video", v).apply() }
     var iconStyle: String get() = _iconStyle.value; set(v) { _iconStyle.value = v; sp.edit().putString("iconStyle", v).apply() }
     var iconMain: Int get() = _iconMain.intValue; set(v) { _iconMain.intValue = v; sp.edit().putInt("iconMain", v).apply() }

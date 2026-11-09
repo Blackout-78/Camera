@@ -86,6 +86,18 @@ fun SettingsScreen(onBack: () -> Unit) {
                     Text("›", color = C.Sub, fontSize = 20.sp)
                 }
             }
+            Section("OPEN PHOTOS WITH") {
+                listOf(
+                    "gallery" to ("Our Gallery" to "Opens straight in your Gallery app"),
+                    "choose" to ("Choose each time" to "Asks which gallery app to use"),
+                    "phone" to ("Phone's default" to "Uses the gallery app your phone normally opens"),
+                ).forEachIndexed { i, (key, t) ->
+                    Row2(t.first, t.second, divider = i < 2, onClick = { Prefs.openWith = key }) {
+                        androidx.compose.material3.RadioButton(selected = Prefs.openWith == key, onClick = { Prefs.openWith = key },
+                            colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = C.Accent))
+                    }
+                }
+            }
             Section("SHOOTING") {
                 Row2("Photo quality", if (Prefs.quality >= 95) "High · 95%" else "Standard · 85%", onClick = { Prefs.quality = if (Prefs.quality >= 95) 85 else 95 }) {
                     Text("Change", color = C.Sub, fontSize = 14.sp)
