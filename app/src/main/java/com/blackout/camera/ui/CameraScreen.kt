@@ -83,6 +83,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -177,6 +179,13 @@ fun CameraScreen(onSettings: () -> Unit) {
     var shutF by remember { mutableFloatStateOf(0.5f) }
     var awb by remember { mutableIntStateOf(0) }
     var ev by remember { mutableIntStateOf(0) }
+    // Night vision
+    var vision by remember { mutableStateOf(Vision.White) }
+    var boost by remember { mutableFloatStateOf(0.6f) }
+    var nvFrame by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    val vp = remember { VisionProcessor() }
+    val nv = mode == Mode.Night && vision != Vision.Night
+    SideEffect { vp.vision = vision; vp.boost = boost }
 
     if (!Prefs.front && front) front = false
 
@@ -214,14 +223,15 @@ fun CameraScreen(onSettings: () -> Unit) {
     }
 
     // Open (or close) the camera whenever what's needed changes.
-    LaunchedEffect(provider, extensions, mode, front, hdr, active, Prefs.quality, Prefs.video) {
+    LaunchedEffect(provider, extensions, mode, nv, front, hdr, active, Prefs.quality, Prefs.video) {
         val p = provider ?: return@LaunchedEffect
         p.unbindAll()
         camera = null; imageCapture = null; videoCapture = null
+        nvFrame = null; vp.reset()
         if (!active) return@LaunchedEffect
         val base = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
         val extMode = when {
-            mode == Mode.Night -> ExtensionMode.NIGHT
+            mode == Mode.Night && !nv -> ExtensionMode.NIGHT
             mode == Mode.Photo && hdr -> ExtensionMode.HDR
             else -> null
         }
@@ -236,15 +246,36 @@ fun CameraScreen(onSettings: () -> Unit) {
         }
         val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
         runCatching {
-            when (mode) {
-                Mode.Video -> {
+            when {
+                mode == Mode.Video -> {
                     val q = when (Prefs.video) { "720p" -> Quality.HD; "4K" -> Quality.UHD; else -> Quality.FHD }
                     val recorder = Recorder.Builder().setQualitySelector(QualitySelector.from(q, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD))).build()
                     val vc = VideoCapture.withOutput(recorder)
                     camera = p.bindToLifecycle(owner, selector, preview, vc)
                     videoCapture = vc
                 }
-                Mode.QR -> {
+                nv -> {
+                    // Night vision: the camera's frames are brightened and recolored before you see them.
+                    val res = androidx.camera.core.resolutionselector.ResolutionSelector.Builder()
+                        .setAspectRatioStrategy(androidx.camera.core.resolutionselector.AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                        .setResolutionStrategy(androidx.camera.core.resolutionselector.ResolutionStrategy(Size(960, 720),
+                            androidx.camera.core.resolutionselector.ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER))
+                        .build()
+                    val analysis = ImageAnalysis.Builder().setResolutionSelector(res)
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
+                    analysis.setAnalyzer(worker) { img ->
+                        val bmp = runCatching { vp.process(img) }.getOrNull()
+                        img.close()
+                        if (bmp != null) { val ib = bmp.asImageBitmap(); main.execute { nvFrame = ib } }
+                    }
+                    val ic = ImageCapture.Builder()
+                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                        .setJpegQuality(100)
+                        .build()
+                    camera = p.bindToLifecycle(owner, selector, preview, analysis, ic)
+                    imageCapture = ic
+                }
+                mode == Mode.QR -> {
                     val analysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
                     analysis.setAnalyzer(worker, QrAnalyzer { text -> main.execute { qrText = text } })
                     camera = p.bindToLifecycle(owner, selector, preview, analysis)
@@ -263,9 +294,9 @@ fun CameraScreen(onSettings: () -> Unit) {
     }
 
     // Flash and torch.
-    LaunchedEffect(flash, imageCapture, camera, mode) {
+    LaunchedEffect(flash, imageCapture, camera, mode, nv) {
         imageCapture?.flashMode = when (flash) { Flash.On -> ImageCapture.FLASH_MODE_ON; Flash.Auto -> ImageCapture.FLASH_MODE_AUTO; Flash.Off -> ImageCapture.FLASH_MODE_OFF }
-        camera?.cameraControl?.enableTorch(mode == Mode.Video && flash == Flash.On)
+        camera?.cameraControl?.enableTorch((mode == Mode.Video || nv) && flash == Flash.On)
     }
 
     // Pro settings: manual ISO and shutter, white balance, exposure.
@@ -279,7 +310,7 @@ fun CameraScreen(onSettings: () -> Unit) {
         val hi = minOf(it.upper, 1_000_000_000L).toDouble()
         (it.lower * (hi / it.lower).pow(shutF.toDouble())).roundToLong()
     } ?: 0L
-    LaunchedEffect(camera, mode, manual, isoValue, expValue, awb) {
+    LaunchedEffect(camera, mode, nv, manual, isoValue, expValue, awb) {
         val cam = camera ?: return@LaunchedEffect
         val ctl = runCatching { Camera2CameraControl.from(cam.cameraControl) }.getOrNull() ?: return@LaunchedEffect
         val b = CaptureRequestOptions.Builder()
@@ -291,11 +322,19 @@ fun CameraScreen(onSettings: () -> Unit) {
             }
             b.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, AWB[awb].second)
         }
+        if (nv) {
+            // Let the camera slow down so each frame gathers more light, and clean the noise as well as it can.
+            c2info?.getCameraCharacteristic(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
+                ?.minWithOrNull(compareBy({ it.lower }, { it.upper }))
+                ?.let { b.setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it) }
+            b.setCaptureRequestOption(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_HIGH_QUALITY)
+        }
         runCatching { ctl.setCaptureRequestOptions(b.build()) }
     }
-    LaunchedEffect(camera, ev, mode) {
+    LaunchedEffect(camera, ev, mode, nv) {
         val cam = camera ?: return@LaunchedEffect
-        runCatching { cam.cameraControl.setExposureCompensationIndex(if (mode == Mode.Pro) ev else 0) }
+        val most = cam.cameraInfo.exposureState.exposureCompensationRange.upper
+        runCatching { cam.cameraControl.setExposureCompensationIndex(if (nv) most else if (mode == Mode.Pro) ev else 0) }
     }
 
     LaunchedEffect(status) { if (status != null) { delay(3000); status = null } }
@@ -311,9 +350,14 @@ fun CameraScreen(onSettings: () -> Unit) {
                 val bytes = ByteArray(buf.remaining()).also { buf.get(it) }
                 val rotation = image.imageInfo.rotationDegrees
                 image.close()
+                val look = if (nv) vision else null
+                val lift = boost
                 scope.launch {
                     val saved = withContext(Dispatchers.IO) {
-                        runCatching { Saver.savePhoto(context, bytes, rotation, Saver.lastLocation(context)) }
+                        runCatching {
+                            val jpeg = if (look != null) VisionProcessor.photo(bytes, look, lift, Prefs.quality) else bytes
+                            Saver.savePhoto(context, jpeg, rotation, Saver.lastLocation(context))
+                        }
                     }
                     busy = false
                     saved.onSuccess { s ->
@@ -367,6 +411,13 @@ fun CameraScreen(onSettings: () -> Unit) {
     val density = LocalDensity.current
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+        if (nv) {
+            Box(Modifier.fillMaxSize().background(Color.Black))
+            nvFrame?.let { androidx.compose.foundation.Image(it, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop) }
+            // Tube edge, like a night vision scope.
+            if (vision != Vision.Thermal) Box(Modifier.fillMaxSize().background(
+                androidx.compose.ui.graphics.Brush.radialGradient(0.6f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.75f))))
+        }
 
         // Tap to focus, pinch to zoom.
         Box(
@@ -458,6 +509,32 @@ fun CameraScreen(onSettings: () -> Unit) {
                     modifier = Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 6.dp))
             }
             if (mode == Mode.QR) qrText?.let { QrCard(context, it) }
+            if (mode == Mode.Night && recording == null) {
+                Column(
+                    Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Vision.entries.forEach { v ->
+                            val on = v == vision
+                            Text(v.label, color = if (on) Color.White else C.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(if (on) C.Accent else C.Line)
+                                    .clickable { vision = v }.padding(vertical = 7.dp))
+                        }
+                    }
+                    if (nv) ProSlider("BOOST", "${(boost * 100).roundToInt()}%", boost) { boost = it }
+                    Text(
+                        when (vision) {
+                            Vision.Night -> "Your phone's own night mode"
+                            Vision.White -> "White phosphor night vision · flash button turns on the light"
+                            Vision.Green -> "Green phosphor night vision · flash button turns on the light"
+                            Vision.Thermal -> "Thermal style · colors show brightness, not heat (phones can't see heat)"
+                        },
+                        color = C.Sub, fontSize = 11.sp,
+                    )
+                }
+            }
             if (mode == Mode.Pro) {
                 Column(
                     Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(14.dp),
