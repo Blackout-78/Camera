@@ -47,7 +47,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         // After an update, put back the icon you chose.
-        AppIcon.syncAfterUpdate(this, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond)
+        // Done in the background so it never slows down opening the camera.
+        val app = applicationContext
+        Thread { runCatching { AppIcon.syncAfterUpdate(app, Prefs.iconStyle, Prefs.iconMain, Prefs.iconSecond) } }.start()
         setContent {
             CameraTheme {
                 PermissionGate {

@@ -148,7 +148,8 @@ fun CameraScreen(onSettings: () -> Unit) {
     val previewView = remember {
         PreviewView(context).apply {
             scaleType = PreviewView.ScaleType.FILL_CENTER
-            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            // Faster to start than the compatible mode.
+            implementationMode = PreviewView.ImplementationMode.PERFORMANCE
         }
     }
 
@@ -205,9 +206,12 @@ fun CameraScreen(onSettings: () -> Unit) {
     }
 
     val provider by produceState<ProcessCameraProvider?>(null) { value = ProcessCameraProvider.getInstance(context).await() }
-    val extensions by produceState<ExtensionsManager?>(null, provider) {
-        val p = provider ?: return@produceState
-        value = runCatching { ExtensionsManager.getInstanceAsync(context, p).await() }.getOrNull()
+    // Night/HDR helpers load only when you pick Night or HDR, so they never slow down opening the camera.
+    val needExt = (mode == Mode.Night && !nv) || (mode == Mode.Photo && hdr)
+    var extensions by remember { mutableStateOf<ExtensionsManager?>(null) }
+    LaunchedEffect(provider, needExt) {
+        val p = provider ?: return@LaunchedEffect
+        if (needExt && extensions == null) extensions = runCatching { ExtensionsManager.getInstanceAsync(context, p).await() }.getOrNull()
     }
 
     // Keep photos upright however the phone is held.
@@ -225,7 +229,7 @@ fun CameraScreen(onSettings: () -> Unit) {
     }
 
     // Open (or close) the camera whenever what's needed changes.
-    LaunchedEffect(provider, extensions, mode, nv, front, hdr, active, Prefs.quality, Prefs.video) {
+    LaunchedEffect(provider, if (needExt) extensions else null, mode, nv, front, hdr, active, Prefs.quality, Prefs.video) {
         val p = provider ?: return@LaunchedEffect
         p.unbindAll()
         camera = null; imageCapture = null; videoCapture = null
@@ -242,7 +246,9 @@ fun CameraScreen(onSettings: () -> Unit) {
             extNote = null
             ext.getExtensionEnabledCameraSelector(base, extMode)
         } else {
-            extNote = if (extMode == ExtensionMode.NIGHT) "This phone has no Night mode for apps · taking normal photos"
+            // While the Night/HDR helper is still loading, say nothing; it re-opens with it in a moment.
+            extNote = if (ext == null) null
+            else if (extMode == ExtensionMode.NIGHT) "This phone has no Night mode for apps · taking normal photos"
             else if (extMode == ExtensionMode.HDR) "This phone has no HDR for apps" else null
             base
         }
