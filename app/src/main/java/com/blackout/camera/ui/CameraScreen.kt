@@ -186,6 +186,8 @@ fun CameraScreen(onSettings: () -> Unit) {
     val vp = remember { VisionProcessor() }
     val nv = mode == Mode.Night && vision != Vision.Night
     SideEffect { vp.vision = vision; vp.boost = boost }
+    // Night vision exposure step: higher = longer exposure per frame.
+    var nvStep by remember { mutableIntStateOf(1) }
 
     if (!Prefs.front && front) front = false
 
@@ -310,7 +312,25 @@ fun CameraScreen(onSettings: () -> Unit) {
         val hi = minOf(it.upper, 1_000_000_000L).toDouble()
         (it.lower * (hi / it.lower).pow(shutF.toDouble())).roundToLong()
     } ?: 0L
-    LaunchedEffect(camera, mode, nv, manual, isoValue, expValue, awb) {
+    // Night vision exposure ladder (each frame gathers light for longer), capped by what the phone allows.
+    val nvLevels = remember(expRange) {
+        listOf(33_000_000L, 66_000_000L, 125_000_000L, 250_000_000L, 500_000_000L)
+            .filter { expRange == null || it <= expRange.upper }.ifEmpty { listOf(expRange?.upper ?: 33_000_000L) }
+    }
+    // Highest sensor gain the phone allows (done on the sensor, before the picture loses detail).
+    val nvIso = isoRange?.upper ?: 0
+    // Watches how much light arrives and lengthens or shortens the exposure to match.
+    LaunchedEffect(camera, nv) {
+        if (!nv) return@LaunchedEffect
+        nvStep = 1
+        while (true) {
+            delay(600)
+            val m = vp.rawMean
+            if (m < 45f && nvStep < nvLevels.lastIndex) nvStep++
+            else if (m > 150f && nvStep > 0) nvStep--
+        }
+    }
+    LaunchedEffect(camera, mode, nv, nvStep, manual, isoValue, expValue, awb) {
         val cam = camera ?: return@LaunchedEffect
         val ctl = runCatching { Camera2CameraControl.from(cam.cameraControl) }.getOrNull() ?: return@LaunchedEffect
         val b = CaptureRequestOptions.Builder()
@@ -322,7 +342,15 @@ fun CameraScreen(onSettings: () -> Unit) {
             }
             b.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, AWB[awb].second)
         }
-        if (nv) {
+        if (nv && manualOk) {
+            // Full manual: highest real sensor gain and a long exposure per frame, like a night vision tube.
+            val t = nvLevels[nvStep.coerceIn(0, nvLevels.lastIndex)]
+            b.setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+            b.setCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY, nvIso)
+            b.setCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME, t)
+            b.setCaptureRequestOption(CaptureRequest.SENSOR_FRAME_DURATION, t)
+            b.setCaptureRequestOption(CaptureRequest.NOISE_REDUCTION_MODE, CaptureRequest.NOISE_REDUCTION_MODE_HIGH_QUALITY)
+        } else if (nv) {
             // Let the camera slow down so each frame gathers more light, and clean the noise as well as it can.
             c2info?.getCameraCharacteristic(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
                 ?.minWithOrNull(compareBy({ it.lower }, { it.upper }))
@@ -527,9 +555,8 @@ fun CameraScreen(onSettings: () -> Unit) {
                     Text(
                         when (vision) {
                             Vision.Night -> "Your phone's own night mode"
-                            Vision.White -> "White phosphor night vision · flash button turns on the light"
-                            Vision.Green -> "Green phosphor night vision · flash button turns on the light"
-                            Vision.Thermal -> "Thermal style · colors show brightness, not heat (phones can't see heat)"
+                            Vision.White, Vision.Green -> nvInfo(manualOk, nvLevels.getOrNull(nvStep))
+                            Vision.Thermal -> "Thermal style · colors show brightness, not heat. Real heat needs a plug-in thermal camera."
                         },
                         color = C.Sub, fontSize = 11.sp,
                     )
@@ -603,6 +630,10 @@ fun CameraScreen(onSettings: () -> Unit) {
         }
     }
 }
+
+private fun nvInfo(manualOk: Boolean, ns: Long?): String =
+    if (!manualOk || ns == null) "Night vision · this phone doesn't allow long exposures, so it needs some light"
+    else "Night vision · exposure ${shutterLabel(ns)}" + if (ns >= 250_000_000L) " · very dark: hold still" else ""
 
 private fun shutterLabel(ns: Long): String =
     if (ns >= 500_000_000L) "%.1fs".format(ns / 1e9) else "1/${(1e9 / ns.coerceAtLeast(1)).roundToInt()}"

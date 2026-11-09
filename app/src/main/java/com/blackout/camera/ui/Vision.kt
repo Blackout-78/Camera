@@ -21,6 +21,8 @@ class VisionProcessor {
     @Volatile var vision = Vision.White
     /** 0..1 from the Boost slider: higher lifts the shadows more. */
     @Volatile var boost = 0.6f
+    /** Average brightness the sensor is getting (0..255), before any boost. Used to lengthen exposure in the dark. */
+    @Volatile var rawMean = 128f
 
     private var acc: FloatArray? = null
     private var bufs = arrayOfNulls<Bitmap>(2)
@@ -38,34 +40,43 @@ class VisionProcessor {
     /** Returns a ready-to-show, upright bitmap of the frame, or null. */
     fun process(image: ImageProxy): Bitmap? {
         val plane = image.planes[0]
-        val w = image.width; val h = image.height
+        val fw = image.width; val fh = image.height
         val row = plane.rowStride; val px = plane.pixelStride
         val buf = plane.buffer
+        // Pixel binning: every 2x2 group of sensor pixels becomes one, which halves the noise.
+        val w = fw / 2; val h = fh / 2
         val n = w * h
         var a = acc
         val fresh = a == null || a.size != n
         if (fresh) { a = FloatArray(n); acc = a }
         a!!
         // Average with earlier frames: the random sensor noise cancels out, the picture stays.
-        val keep = if (fresh) 0f else if (vision == Vision.Thermal) 0.7f else 0.55f
+        // Darker scenes average more frames (cleaner, but moving things smear a little).
+        val dark = rawMean < 40f
+        val keep = if (fresh) 0f else if (vision == Vision.Thermal) 0.8f else if (dark) 0.75f else 0.6f
         java.util.Arrays.fill(hist, 0)
+        var sum = 0L
         var i = 0
         for (y in 0 until h) {
-            var off = y * row
+            var o1 = 2 * y * row
+            var o2 = o1 + row
             for (x in 0 until w) {
-                val v = (buf.get(off).toInt() and 0xFF).toFloat()
-                val s = a[i] * keep + v * (1f - keep)
+                val raw = ((buf.get(o1).toInt() and 0xFF) + (buf.get(o1 + px).toInt() and 0xFF) +
+                    (buf.get(o2).toInt() and 0xFF) + (buf.get(o2 + px).toInt() and 0xFF)) shr 2
+                sum += raw
+                val s = a[i] * keep + raw * (1f - keep)
                 a[i] = s
-                hist[s.toInt()]++
-                off += px; i++
+                hist[s.toInt().coerceIn(0, 255)]++
+                o1 += 2 * px; o2 += 2 * px; i++
             }
         }
+        rawMean = sum.toFloat() / n
         // Auto gain: stretch the darkest 1% to black and the brightest 0.5% to full.
         var c = 0; var newLo = 0
         while (newLo < 255 && c + hist[newLo] < n / 100) { c += hist[newLo]; newLo++ }
         c = 0; var newHi = 255
         while (newHi > 0 && c + hist[newHi] < n / 200) { c += hist[newHi]; newHi-- }
-        if (newHi - newLo < 10) newHi = (newLo + 10).coerceAtMost(255)
+        if (newHi - newLo < 6) newHi = (newLo + 6).coerceAtMost(255)
         if (fresh) { lo = newLo.toFloat(); hi = newHi.toFloat() } else { lo += (newLo - lo) * 0.15f; hi += (newHi - hi) * 0.15f }
         buildLut(lo, hi, vision, boost, lut)
 
@@ -80,7 +91,7 @@ class VisionProcessor {
         i = 0
         for (y in 0 until h) {
             for (x in 0 until w) {
-                var v = a[i].toInt()
+                var v = a[i].toInt().coerceIn(0, 255)
                 if (grain) v = (v + noise[(i + shift) and 4095]).coerceIn(0, 255)
                 val o = when (rot) {
                     90 -> x * ow + (h - 1 - y)
