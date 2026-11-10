@@ -2,6 +2,19 @@
 
 A private camera for Android. Fully offline: no internet permission, nothing collected, no background camera.
 
+## Screens
+
+These are design previews. The finished app follows this look.
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/01-photo.png" width="180" alt="Photo"></td>
+    <td><img src="docs/screenshots/02-pro.png" width="180" alt="Pro"></td>
+    <td><img src="docs/screenshots/03-qr.png" width="180" alt="Qr"></td>
+    <td><img src="docs/screenshots/04-settings.png" width="180" alt="Settings"></td>
+  </tr>
+</table>
+
 ## Features
 - Photo, video, Night, Pro (ISO, shutter, white balance, exposure) and an offline QR scanner
 - Flash, zoom, tap to focus, timer, grid lines, HDR where the phone supports it
