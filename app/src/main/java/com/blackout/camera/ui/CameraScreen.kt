@@ -290,7 +290,8 @@ fun CameraScreen(onSettings: () -> Unit) {
                 }
                 else -> {
                     val ic = ImageCapture.Builder()
-                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                        // Fast shutter: the picture is taken at once. HDR keeps the slower, higher-quality path.
+                        .setCaptureMode(if (hdr) ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY else ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                         .setJpegQuality(Prefs.quality)
                         .build()
                     camera = p.bindToLifecycle(owner, selector, preview, ic)
@@ -319,8 +320,9 @@ fun CameraScreen(onSettings: () -> Unit) {
         (it.lower * (hi / it.lower).pow(shutF.toDouble())).roundToLong()
     } ?: 0L
     // Night vision exposure ladder (each frame gathers light for longer), capped by what the phone allows.
+    // Longest is 125 ms (about 8 frames a second) so the picture stays smooth; the frame averaging makes up the light.
     val nvLevels = remember(expRange) {
-        listOf(33_000_000L, 66_000_000L, 125_000_000L, 250_000_000L, 500_000_000L)
+        listOf(33_000_000L, 50_000_000L, 66_000_000L, 100_000_000L, 125_000_000L)
             .filter { expRange == null || it <= expRange.upper }.ifEmpty { listOf(expRange?.upper ?: 33_000_000L) }
     }
     // Highest sensor gain the phone allows (done on the sensor, before the picture loses detail).
@@ -639,7 +641,7 @@ fun CameraScreen(onSettings: () -> Unit) {
 
 private fun nvInfo(manualOk: Boolean, ns: Long?): String =
     if (!manualOk || ns == null) "Night vision · this phone doesn't allow long exposures, so it needs some light"
-    else "Night vision · exposure ${shutterLabel(ns)}" + if (ns >= 250_000_000L) " · very dark: hold still" else ""
+    else "Night vision · exposure ${shutterLabel(ns)}" + if (ns >= 100_000_000L) " · very dark: hold still" else ""
 
 private fun shutterLabel(ns: Long): String =
     if (ns >= 500_000_000L) "%.1fs".format(ns / 1e9) else "1/${(1e9 / ns.coerceAtLeast(1)).roundToInt()}"
