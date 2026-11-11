@@ -24,6 +24,15 @@ class QrAnalyzer(private val onFound: (String) -> Unit) : ImageAnalysis.Analyzer
             val plane = image.planes[0]
             val buf = plane.buffer
             val data = ByteArray(buf.remaining()).also { buf.get(it) }
+            // Own offline reader first (rowStride-aware copy), ZXing only as backup.
+            val w = image.width
+            val h = image.height
+            val stride = plane.rowStride
+            val lum = if (stride == w) data else ByteArray(w * h).also { out ->
+                for (y in 0 until h) System.arraycopy(data, y * stride, out, y * w, w)
+            }
+            val own = runCatching { QrDecoder.decode(lum, w, h) }.getOrNull()
+            if (own != null) { onFound(own); return }
             val source = PlanarYUVLuminanceSource(data, plane.rowStride, image.height, 0, 0, image.width, image.height, false)
             val result = runCatching { reader.decodeWithState(BinaryBitmap(HybridBinarizer(source))) }.getOrNull()
             if (result != null) onFound(result.text)
