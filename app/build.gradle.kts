@@ -77,5 +77,5 @@ dependencies {
     implementation("androidx.camera:camera-extensions:$camerax")
 
     // QR codes, read fully offline.
-    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.zxing:core:3.5.4")
 }
