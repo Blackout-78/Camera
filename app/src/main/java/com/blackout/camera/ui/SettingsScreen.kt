@@ -112,6 +112,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             Section("APP ICON") { IconSection() }
             Text("Camera works fully offline. It has no internet permission, never runs in the background, and keeps no list of your photos.",
                 color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(6.dp))
+            Text(com.blackout.camera.Version.full, color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
         }
     }
 }

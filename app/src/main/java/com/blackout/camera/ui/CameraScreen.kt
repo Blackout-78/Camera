@@ -506,6 +506,7 @@ fun CameraScreen(onSettings: () -> Unit) {
                     Glass(if (showGrid) Icons.Outlined.GridOn else Icons.Outlined.GridOff, "Grid lines") { showGrid = !showGrid }
                     Glass(Icons.Outlined.Settings, "Settings", onClick = onSettings)
                 }
+                Text(com.blackout.camera.Version.tag, color = Color.White.copy(alpha = 0.6f), fontSize = 10.sp, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, top = 4.dp).clickable { onSettings() })
                 if (Prefs.badge) {
                     Spacer(Modifier.height(10.dp))
                     Row(
