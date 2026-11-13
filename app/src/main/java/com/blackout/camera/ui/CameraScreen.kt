@@ -182,6 +182,7 @@ fun CameraScreen(onSettings: () -> Unit) {
     var ev by remember { mutableIntStateOf(0) }
     // Night vision
     var vision by remember { mutableStateOf(Vision.White) }
+    var nightOpen by remember { mutableStateOf(true) }
     var boost by remember { mutableFloatStateOf(0.6f) }
     var nvFrame by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     val vp = remember { VisionProcessor() }
@@ -546,7 +547,12 @@ fun CameraScreen(onSettings: () -> Unit) {
                     modifier = Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 6.dp))
             }
             if (mode == Mode.QR) qrText?.let { QrCard(context, it) }
-            if (mode == Mode.Night && recording == null) {
+            if (mode == Mode.Night && recording == null && !nightOpen && nv) {
+                Column(
+                    Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 6.dp),
+                ) { ProSlider("BOOST", "${(boost * 100).roundToInt()}%", boost) { boost = it } }
+            }
+            if (mode == Mode.Night && recording == null && nightOpen) {
                 Column(
                     Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -557,7 +563,7 @@ fun CameraScreen(onSettings: () -> Unit) {
                             Text(v.label, color = if (on) Color.White else C.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                 modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(if (on) C.Accent else C.Line)
-                                    .clickable { vision = v }.padding(vertical = 7.dp))
+                                    .clickable { vision = v; nightOpen = false }.padding(vertical = 7.dp))
                         }
                     }
                     if (nv) ProSlider("BOOST", "${(boost * 100).roundToInt()}%", boost) { boost = it }
@@ -612,7 +618,7 @@ fun CameraScreen(onSettings: () -> Unit) {
                         val on = m == mode
                         Text(m.name, color = if (on) Color.White else Color(0xFFD0D0D6), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(if (on) C.Accent else Color.Transparent)
-                                .clickable { mode = m; if (m != Mode.Photo) hdr = false }.padding(horizontal = 12.dp, vertical = 7.dp))
+                                .clickable { if (m == Mode.Night) nightOpen = mode != Mode.Night || !nightOpen; mode = m; if (m != Mode.Photo) hdr = false }.padding(horizontal = 12.dp, vertical = 7.dp))
                     }
                 }
                 if (zoom > 1.01f || camera != null) {
