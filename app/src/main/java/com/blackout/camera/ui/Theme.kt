@@ -8,11 +8,12 @@ import androidx.compose.ui.graphics.Color
 /** Design B · Clear: black, see-through controls, blue accent. */
 object C {
     val Bg = Color(0xFF000000)
-    val Card = Color(0xFF1C1C1F)
-    val Line = Color(0xFF2A2A2E)
+    val Card = Color(0xFF1C1C1C)
+    val Line = Color(0xFF3A3A3A)
     val Text = Color(0xFFF2F2F2)
     val Sub = Color(0xFFA0A0A8)
-    val Accent = Color(0xFF4F9DFF)
+    val Accent = Color(0xFF23295D)
+    val AccentInk = Color(0xFF93A0F0)
     val Glass = Color(0x73000000)
     val Rec = Color(0xFFFF5A5F)
     val Warn = Color(0xFFFFB86B)

@@ -513,7 +513,7 @@ fun CameraScreen(onSettings: () -> Unit) {
                         Modifier.clip(RoundedCornerShape(14.dp)).background(C.Glass).padding(horizontal = 10.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.Outlined.VerifiedUser, null, tint = C.Accent, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Outlined.VerifiedUser, null, tint = C.AccentInk, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(
                             (if (Prefs.location) "Location on" else "No location") + " · No phone info" + if (Prefs.noDate) " · No date" else "",
@@ -650,7 +650,7 @@ private fun shutterLabel(ns: Long): String =
 @Composable
 private fun Glass(icon: ImageVector, desc: String, tint: Color = Color.White, label: String? = null, onClick: () -> Unit) {
     Box(Modifier.size(44.dp).clip(CircleShape).background(C.Glass).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        if (label != null) Text(label, color = C.Accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        if (label != null) Text(label, color = C.AccentInk, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         else Icon(icon, desc, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
