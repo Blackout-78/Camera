@@ -183,6 +183,7 @@ fun CameraScreen(onSettings: () -> Unit) {
     // Night vision
     var vision by remember { mutableStateOf(Vision.White) }
     var nightOpen by remember { mutableStateOf(true) }
+    var proOpen by remember { mutableStateOf(true) }
     var boost by remember { mutableFloatStateOf(0.6f) }
     var nvFrame by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     val vp = remember { VisionProcessor() }
@@ -577,7 +578,7 @@ fun CameraScreen(onSettings: () -> Unit) {
                     )
                 }
             }
-            if (mode == Mode.Pro) {
+            if (mode == Mode.Pro && proOpen) {
                 Column(
                     Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -604,7 +605,7 @@ fun CameraScreen(onSettings: () -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         AWB.forEachIndexed { i, (name, _) ->
                             Text(name, color = if (awb == i) Color.White else C.Text, fontSize = 12.sp,
-                                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (awb == i) C.Accent else C.Line).clickable { awb = i }.padding(horizontal = 10.dp, vertical = 6.dp))
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (awb == i) C.Accent else C.Line).clickable { awb = i; proOpen = false }.padding(horizontal = 10.dp, vertical = 6.dp))
                         }
                     }
                 }
@@ -618,7 +619,7 @@ fun CameraScreen(onSettings: () -> Unit) {
                         val on = m == mode
                         Text(m.name, color = if (on) Color.White else Color(0xFFD0D0D6), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(if (on) C.Accent else Color.Transparent)
-                                .clickable { if (m == Mode.Night) nightOpen = mode != Mode.Night || !nightOpen; mode = m; if (m != Mode.Photo) hdr = false }.padding(horizontal = 12.dp, vertical = 7.dp))
+                                .clickable { if (m == Mode.Night) nightOpen = mode != Mode.Night || !nightOpen; if (m == Mode.Pro) proOpen = mode != Mode.Pro || !proOpen; mode = m; if (m != Mode.Photo) hdr = false }.padding(horizontal = 12.dp, vertical = 7.dp))
                     }
                 }
                 if (zoom > 1.01f || camera != null) {
