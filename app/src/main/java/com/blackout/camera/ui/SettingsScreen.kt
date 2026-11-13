@@ -110,6 +110,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Row2("Save to", "DCIM/Camera, so Gallery shows them", divider = false) {}
             }
             Section("APP ICON") { IconSection() }
+            Section("UPDATES") {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                Row2("Open GitHub Releases", "Opens in your browser", onClick = { com.blackout.camera.Version.openReleases(ctx) }, divider = false) { Text("›", color = C.Sub, fontSize = 20.sp) }
+            }
             Text("Camera works fully offline. It has no internet permission, never runs in the background, and keeps no list of your photos.",
                 color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(6.dp))
             Text(com.blackout.camera.Version.full, color = C.Sub, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp))
