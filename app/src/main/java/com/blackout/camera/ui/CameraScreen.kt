@@ -72,6 +72,8 @@ import androidx.compose.material.icons.outlined.GridOff
 import androidx.compose.material.icons.outlined.GridOn
 import androidx.compose.material.icons.outlined.HdrOff
 import androidx.compose.material.icons.outlined.HdrOn
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.TimerOff
@@ -548,6 +550,7 @@ fun CameraScreen(onSettings: () -> Unit) {
                     modifier = Modifier.padding(horizontal = 20.dp).clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 12.dp, vertical = 6.dp))
             }
             if (mode == Mode.QR) qrText?.let { QrCard(context, it) }
+            if (mode == Mode.Night && recording == null && !nightOpen) PanelArrow(false) { nightOpen = true }
             if (mode == Mode.Night && recording == null && !nightOpen && nv) {
                 Column(
                     Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 6.dp),
@@ -558,6 +561,7 @@ fun CameraScreen(onSettings: () -> Unit) {
                     Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    PanelArrow(true) { nightOpen = false }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Vision.entries.forEach { v ->
                             val on = v == vision
@@ -578,11 +582,13 @@ fun CameraScreen(onSettings: () -> Unit) {
                     )
                 }
             }
+            if (mode == Mode.Pro && !proOpen) PanelArrow(false) { proOpen = true }
             if (mode == Mode.Pro && proOpen) {
                 Column(
                     Modifier.padding(horizontal = 14.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    PanelArrow(true) { proOpen = false }
                     if (manualOk) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Manual ISO and shutter", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -660,6 +666,16 @@ private fun Glass(icon: ImageVector, desc: String, tint: Color = Color.White, la
         if (label != null) Text(label, color = C.AccentInk, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         else Icon(icon, desc, tint = tint, modifier = Modifier.size(22.dp))
     }
+}
+
+@Composable
+private fun PanelArrow(open: Boolean, onClick: () -> Unit) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Box(
+        Modifier.width(52.dp).height(24.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(if (open) Icons.Outlined.KeyboardArrowDown else Icons.Outlined.KeyboardArrowUp, if (open) "Close panel" else "Open panel", tint = Color.White, modifier = Modifier.size(20.dp))
+    } }
 }
 
 @Composable
