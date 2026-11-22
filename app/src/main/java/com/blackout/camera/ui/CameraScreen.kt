@@ -749,7 +749,14 @@ private fun QrCard(context: Context, text: String) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Copy", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(C.Accent).clickable {
-                    context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("QR", text))
+                    val clip = ClipData.newPlainText("QR", text)
+                    // Keeps the copied text out of clipboard previews (Android 13 and newer).
+                    if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        clip.description.extras = android.os.PersistableBundle().apply {
+                            putBoolean(android.content.ClipDescription.EXTRA_IS_SENSITIVE, true)
+                        }
+                    }
+                    context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(clip)
                 }.padding(horizontal = 14.dp, vertical = 8.dp))
             Text("Share text", color = Color.White, fontSize = 14.sp,
                 modifier = Modifier.clip(RoundedCornerShape(10.dp)).border(1.dp, C.Line, RoundedCornerShape(10.dp)).clickable {
